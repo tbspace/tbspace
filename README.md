@@ -40,8 +40,10 @@ Zusätzlich können Inside- und Outside-Bars markiert werden (Modul 4):
 
 - **Inside-Bar**: Kerze liegt vollständig innerhalb der Vorkerzen-Range
   (`high ≤ high[1]` und `low ≥ low[1]`) – Akkumulation im Trend, markiert mit einer
-  **grauen Box**. Es wird immer nur **eine Inside-Bar gleichzeitig** verwaltet, eine
-  neue entsteht erst, wenn die aktuelle abgeschlossen ist (**keine Verschachtelung**).
+  **grauen Box**. Eine Inside-Bar gilt als **abgeschlossen, sobald der Kurs sie per
+  Schlusskurs verlässt** – bis dahin entsteht keine neue Inside-Bar (**keine
+  Verschachtelung**). Im An-Modus läuft die abgeschlossene Box parallel bis zum
+  Re-Test weiter, während bereits neue Inside-Bars erkannt werden können.
 - **Outside-Bar** (`OB`): Kerze umschließt die Vorkerze komplett
   (`high ≥ high[1]` und `low ≤ low[1]`) – Hinweis auf mögliche Trendumkehr.
 

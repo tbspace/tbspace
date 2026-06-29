@@ -200,48 +200,68 @@ bool isInsideBar  = high <= high[1] and low >= low[1]
 bool isOutsideBar = high >= high[1] and low <= low[1]
 
 // --- Inside-Bar Zustandsmaschine -------------------------------------------
-// Es ist immer nur EINE Inside-Bar-Box aktiv (verhindert verschachtelte Inside-
-// Bars). Eine neue Inside-Bar wird erst erkannt, wenn die aktive abgeschlossen ist.
-var bool  ibActive = false   // Box wird gerade verwaltet
-var bool  ibBroken = false   // Kurs hat die Box per Schlusskurs verlassen
-var bool  ibLeft   = false   // Kurs hat die Box nach dem Ausbruch vollständig verlassen
+// Eine Inside-Bar gilt als ABGESCHLOSSEN, sobald der Kurs sie per Schlusskurs
+// verlässt. Bis dahin entsteht keine neue Inside-Bar (keine Verschachtelung).
+// Danach dürfen sofort neue Inside-Bars entstehen.
+//   • 'Erweitern' = Aus: Box wird beim Ausbruch um x Balken verlängert und fixiert.
+//   • 'Erweitern' = An : Box wandert in eine Pending-Liste und wird so lange weiter
+//                        nach rechts verlängert, bis der Kurs sie erneut anläuft.
+var bool  ibActive = false   // Pre-Breakout-Box wird gerade verwaltet
 var float ibTop    = na
 var float ibBot    = na
 var box   ibBox    = na
 
+// Pending-Liste (nur 'Erweitern' = An): Boxen, die nach dem Ausbruch auf den
+// Re-Test warten und bis dahin weiter nach rechts verlängert werden.
+var array<box>   pbBox  = array.new<box>()
+var array<float> pbTop  = array.new<float>()
+var array<float> pbBot  = array.new<float>()
+var array<bool>  pbLeft = array.new<bool>()   // Kurs hat die Box vollständig verlassen
+
 if showInside and barstate.isconfirmed
-    if ibActive
-        // Box immer bis zur aktuellen Kerze nach rechts mitführen
-        box.set_right(ibBox, bar_index)
-        if not ibBroken
-            // Ausbruch = Schlusskurs außerhalb der Box-Range
-            if close > ibTop or close < ibBot
-                ibBroken := true
-                if not extendIB
-                    // 'Erweitern' = Aus: noch x Balken verlängern und abschließen
-                    box.set_right(ibBox, bar_index + extendBars)
-                    ibActive := false
-        else
-            // 'Erweitern' = An: weiter verlängern bis zum erneuten Anlaufen (Re-Test)
-            if not ibLeft
+    // 1) Pending-Boxen (Re-Test) verlängern und prüfen
+    if array.size(pbBox) > 0
+        for i = array.size(pbBox) - 1 to 0
+            box bx = array.get(pbBox, i)
+            box.set_right(bx, bar_index)
+            float t = array.get(pbTop, i)
+            float b = array.get(pbBot, i)
+            if not array.get(pbLeft, i)
                 // warten, bis der Kurs die Box vollständig verlassen hat
-                if low > ibTop or high < ibBot
-                    ibLeft := true
+                if low > t or high < b
+                    array.set(pbLeft, i, true)
             else
-                // erneutes Anlaufen: Kerzen-Range berührt die Box wieder
-                if high >= ibBot and low <= ibTop
-                    box.set_right(ibBox, bar_index)
-                    ibActive := false
-    else
-        // keine aktive Box -> neue Inside-Bar darf entstehen
-        if isInsideBar
-            ibTop    := high
-            ibBot    := low
-            ibBroken := false
-            ibLeft   := false
-            ibActive := true
-            // links 1 Bar Versatz, damit die Box von Beginn an sichtbar ist
-            ibBox := box.new(bar_index - 1, ibTop, bar_index, ibBot, xloc=xloc.bar_index, border_color=ibBorder, border_width=1, bgcolor=ibFill)
+                // erneutes Anlaufen: Kerzen-Range berührt die Box wieder -> fixieren
+                if high >= b and low <= t
+                    box.set_right(bx, bar_index)
+                    array.remove(pbBox, i)
+                    array.remove(pbTop, i)
+                    array.remove(pbBot, i)
+                    array.remove(pbLeft, i)
+
+    // 2) Aktive (Pre-Breakout) Box verwalten
+    if ibActive
+        box.set_right(ibBox, bar_index)
+        // Ausbruch = Schlusskurs außerhalb der Box-Range
+        if close > ibTop or close < ibBot
+            if extendIB
+                // An: in Pending-Liste verschieben, Re-Test abwarten
+                array.push(pbBox, ibBox)
+                array.push(pbTop, ibTop)
+                array.push(pbBot, ibBot)
+                array.push(pbLeft, false)
+            else
+                // Aus: x Balken verlängern und fixieren
+                box.set_right(ibBox, bar_index + extendBars)
+            ibActive := false
+
+    // 3) Neue Inside-Bar erkennen (nur wenn keine aktive Pre-Breakout-Box läuft)
+    if not ibActive and isInsideBar
+        ibTop    := high
+        ibBot    := low
+        ibActive := true
+        // links 1 Bar Versatz, damit die Box von Beginn an sichtbar ist
+        ibBox := box.new(bar_index - 1, ibTop, bar_index, ibBot, xloc=xloc.bar_index, border_color=ibBorder, border_width=1, bgcolor=ibFill)
 
 // Outside-Bar: Marker unter der Kerze
 plotshape(showOutside and isOutsideBar, title="Outside-Bar", style=shape.square, location=location.belowbar, color=obColor, textcolor=obColor, size=size.tiny, text="OB")
