@@ -26,6 +26,11 @@ bestimmt: ein **höheres Tief** nach einem Aufwärtsimpuls ergibt eine P-Struktu
 Momentum-Bewegung (z. B. Long-Impuls mit grünen Kerzen) korrekt **nicht** als
 Gegenstruktur markiert.
 
+Zusätzlich muss ein **Mindestverhältnis Bewegung:Konsolidierung** (Default **3:1**)
+erfüllt sein: Die Impulsbewegung muss mindestens das 3-fache der Konsolidierungs-
+(Box-)Höhe betragen, damit nicht jede kleine Bewegung und Gegenbewegung als Struktur
+erkannt wird. Der Wert ist in den Einstellungen anpassbar.
+
 Für Short-Trends gilt die Logik spiegelverkehrt. Der Indikator arbeitet immer auf
 dem **aktuell im Chart geöffneten Time Frame** (keine feste TF-Vorgabe).
 
@@ -33,13 +38,15 @@ dem **aktuell im Chart geöffneten Time Frame** (keine feste TF-Vorgabe).
 
 Zusätzlich können Inside- und Outside-Bars markiert werden (Modul 4):
 
-- **Inside-Bar** (`IB`): Kerze liegt vollständig innerhalb der Vorkerzen-Range
-  (`high ≤ high[1]` und `low ≥ low[1]`) – Akkumulation im Trend.
+- **Inside-Bar**: Kerze liegt vollständig innerhalb der Vorkerzen-Range
+  (`high ≤ high[1]` und `low ≥ low[1]`) – Akkumulation im Trend, markiert mit einer
+  **grauen Box**.
 - **Outside-Bar** (`OB`): Kerze umschließt die Vorkerze komplett
   (`high ≥ high[1]` und `low ≤ low[1]`) – Hinweis auf mögliche Trendumkehr.
 
-Diese Funktion ist **standardmäßig deaktiviert** und im Code klar abgegrenzt
-(Block `INSIDE-/OUTSIDE-BARS — START … ENDE`), sodass sie bei Bedarf komplett
+Inside- und Outside-Bars sind **getrennt schaltbar** und beide **standardmäßig
+deaktiviert**. Der Code ist klar abgegrenzt (Block
+`INSIDE-/OUTSIDE-BARS — START … ENDE`), sodass die Funktion bei Bedarf komplett
 entfernt werden kann.
 
 ## Verwendung
@@ -53,11 +60,13 @@ entfernt werden kann.
 | Einstellung | Bedeutung |
 |---|---|
 | **Bestätigungskerzen** | Anzahl Gegen-Schlusskurse zur Bestätigung einer Range-Grenze (Methodik = 2). |
+| **Mindestverhältnis Bewegung:Konsolidierung** | Impuls muss mind. dieses Vielfache der Box-Höhe betragen (Default 3:1). |
 | **Nur abgeschlossene Kerzen** | Zählung erst beim Kerzenschluss → kein Repainting. |
 | **Strukturen / Range-Punkte / P-b-Beschriftung** | Anzeige-Optionen. |
 | **Letzte Struktur verlängern** | Aktuelle Range live nach rechts ziehen. |
 | **Farben** | Füllung und Rahmen für P- bzw. b-Strukturen. |
-| **Inside-/Outside-Bars anzeigen** | Optionale IB/OB-Markierung (Standard: aus). |
+| **Inside-Bars anzeigen** | Optionale Inside-Bar-Markierung als graue Box (Standard: aus). |
+| **Outside-Bars anzeigen** | Optionale Outside-Bar-Markierung (Standard: aus). |
 
 ## Hinweis
 

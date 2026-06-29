@@ -32,6 +32,7 @@ indicator("P-/b-Strukturen (Schlusskurs-Zählung)", shorttitle="PbD", overlay=tr
 // ===================== Eingaben ==============================================
 grpL = "Logik"
 confirmBars = input.int(2, "Bestätigungskerzen", minval=1, maxval=10, group=grpL, tooltip="Anzahl aufeinanderfolgender Schlusskurse gegen die Trendrichtung, die eine Range-Grenze bestätigen. Notion-Methodik = 2.")
+minRatio    = input.float(3.0, "Mindestverhältnis Bewegung:Konsolidierung", minval=1.0, step=0.5, group=grpL, tooltip="Die Impulsbewegung muss mindestens dieses Vielfache der Konsolidierungs-(Box-)Höhe betragen, damit eine Struktur gezeichnet wird. Default 3 = 3:1.")
 useConfirmed = input.bool(true, "Nur abgeschlossene Kerzen verwenden (kein Repainting)", group=grpL, tooltip="An: Zählung erfolgt erst beim Kerzenschluss. Aus: aktualisiert live (kann repainten).")
 
 grpV = "Darstellung"
@@ -136,7 +137,11 @@ if lockNow
         // Neues Range-High bestätigt.
         // b-Struktur NUR, wenn es ein TIEFERES Hoch ist (= Abwärtstrend-Pullback);
         // ein höheres Hoch ist ein Aufwärtsimpuls und bekommt KEINE Box.
-        bool isB = not na(lastHighPrice) and not na(lastLowPrice) and lockPrice < lastHighPrice
+        // Zusätzlich muss der Abwärtsimpuls mind. minRatio-mal so groß sein wie die
+        // Konsolidierung (Box-Höhe).
+        float impulseB = lastHighPrice - lastLowPrice   // Abwärtsimpuls (vorheriges Hoch -> Tief)
+        float consolB  = lockPrice - lastLowPrice       // Konsolidierung (Box-Höhe)
+        bool isB = not na(lastHighPrice) and not na(lastLowPrice) and lockPrice < lastHighPrice and consolB > 0 and impulseB >= minRatio * consolB
         if isB and showBoxes
             box nb = box.new(lastLowBar, lockPrice, lockBar, lastLowPrice, xloc=xloc.bar_index, border_color=bBorder, border_width=1, bgcolor=bFill)
             lastBox := nb
@@ -149,7 +154,11 @@ if lockNow
         // Neues Range-Low bestätigt.
         // P-Struktur NUR, wenn es ein HÖHERES Tief ist (= Aufwärtstrend-Pullback);
         // ein tieferes Tief ist ein Abwärtsimpuls und bekommt KEINE Box.
-        bool isP = not na(lastLowPrice) and not na(lastHighPrice) and lockPrice > lastLowPrice
+        // Zusätzlich muss der Aufwärtsimpuls mind. minRatio-mal so groß sein wie die
+        // Konsolidierung (Box-Höhe).
+        float impulseP = lastHighPrice - lastLowPrice   // Aufwärtsimpuls (vorheriges Tief -> Hoch)
+        float consolP  = lastHighPrice - lockPrice      // Konsolidierung (Box-Höhe)
+        bool isP = not na(lastLowPrice) and not na(lastHighPrice) and lockPrice > lastLowPrice and consolP > 0 and impulseP >= minRatio * consolP
         if isP and showBoxes
             box nb = box.new(lastHighBar, lastHighPrice, lockBar, lockPrice, xloc=xloc.bar_index, border_color=pBorder, border_width=1, bgcolor=pFill)
             lastBox := nb
@@ -170,23 +179,30 @@ if extendLast and not na(lastBox)
 // ║
 // ║  Zum Entfernen dieser Funktionalität einfach den kompletten Block zwischen
 // ║  "INSIDE-/OUTSIDE-BARS — START" und "INSIDE-/OUTSIDE-BARS — ENDE" löschen.
-// ║  Standardmäßig DEAKTIVIERT (Eingabe "Inside-/Outside-Bars anzeigen").
+// ║  Inside- und Outside-Bars sind getrennt schaltbar, beide standardmäßig AUS.
 // ║
 // ║   • Inside-Bar : Kerze liegt vollständig innerhalb der Vorkerzen-Range
 // ║                  (high <= high[1] und low >= low[1]). Akkumulation im Trend.
+// ║                  -> wird mit einer grauen Box markiert.
 // ║   • Outside-Bar: Kerze umschließt die Vorkerze komplett (high >= high[1]
 // ║                  und low <= low[1]). Hinweis auf mögliche Trendumkehr.
 // ╚═══════════════════════════════════════════════════════════════════════════
 grpIO = "Inside-/Outside-Bars (optional)"
-showIOBars = input.bool(false, "Inside-/Outside-Bars anzeigen", group=grpIO, tooltip="Standardmäßig deaktiviert. Markiert Inside-Bars (Akkumulation) und Outside-Bars (mögliche Umkehr).")
-ibColor    = input.color(color.orange, "Inside-Bar Farbe",  group=grpIO)
-obColor    = input.color(color.fuchsia, "Outside-Bar Farbe", group=grpIO)
+showInside  = input.bool(false, "Inside-Bars anzeigen",  group=grpIO, tooltip="Standardmäßig deaktiviert. Markiert Inside-Bars (Akkumulation) mit einer grauen Box.")
+showOutside = input.bool(false, "Outside-Bars anzeigen", group=grpIO, tooltip="Standardmäßig deaktiviert. Markiert Outside-Bars (mögliche Trendumkehr).")
+ibBorder = input.color(color.new(color.gray, 0),  "Inside-Bar Box (Rahmen)",  group=grpIO)
+ibFill   = input.color(color.new(color.gray, 80), "Inside-Bar Box (Füllung)", group=grpIO)
+obColor  = input.color(color.fuchsia,             "Outside-Bar Farbe",        group=grpIO)
 
 bool isInsideBar  = high <= high[1] and low >= low[1]
 bool isOutsideBar = high >= high[1] and low <= low[1]
 
-plotshape(showIOBars and isInsideBar,  title="Inside-Bar",  style=shape.diamond, location=location.abovebar, color=ibColor, textcolor=ibColor, size=size.tiny, text="IB")
-plotshape(showIOBars and isOutsideBar, title="Outside-Bar", style=shape.square,  location=location.belowbar, color=obColor, textcolor=obColor, size=size.tiny, text="OB")
+// Inside-Bar: graue Box um die Kerze (eine Bar breit)
+if showInside and isInsideBar and barstate.isconfirmed
+    box.new(bar_index, high, bar_index, low, xloc=xloc.bar_index, border_color=ibBorder, border_width=1, bgcolor=ibFill)
+
+// Outside-Bar: Marker unter der Kerze
+plotshape(showOutside and isOutsideBar, title="Outside-Bar", style=shape.square, location=location.belowbar, color=obColor, textcolor=obColor, size=size.tiny, text="OB")
 // ╔═══════════════════════════════════════════════════════════════════════════
 // ║  OPTIONAL: INSIDE- / OUTSIDE-BARS  —  ENDE
 // ╚═══════════════════════════════════════════════════════════════════════════
