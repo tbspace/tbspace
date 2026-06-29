@@ -197,9 +197,10 @@ obColor  = input.color(color.fuchsia,             "Outside-Bar Farbe",        gr
 bool isInsideBar  = high <= high[1] and low >= low[1]
 bool isOutsideBar = high >= high[1] and low <= low[1]
 
-// Inside-Bar: graue Box um die Kerze (eine Bar breit)
+// Inside-Bar: graue Box um die Kerze (links/rechts je 1 Bar -> sichtbar & zentriert;
+// eine Box mit left == right hätte Breite 0 und würde nicht angezeigt)
 if showInside and isInsideBar and barstate.isconfirmed
-    box.new(bar_index, high, bar_index, low, xloc=xloc.bar_index, border_color=ibBorder, border_width=1, bgcolor=ibFill)
+    box.new(bar_index - 1, high, bar_index + 1, low, xloc=xloc.bar_index, border_color=ibBorder, border_width=1, bgcolor=ibFill)
 
 // Outside-Bar: Marker unter der Kerze
 plotshape(showOutside and isOutsideBar, title="Outside-Bar", style=shape.square, location=location.belowbar, color=obColor, textcolor=obColor, size=size.tiny, text="OB")
