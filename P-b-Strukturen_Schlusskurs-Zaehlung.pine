@@ -1,0 +1,148 @@
+//@version=6
+// =============================================================================
+//  P-/b-Strukturen  —  Schlusskurs-Zählung (PbD-Methodik)
+//  Trade The Trader Ausbildung · Modul 4 · "Schlusskurs-Zählung — PbD-Methodik"
+//
+//  Logik (1:1 aus der Notion-Datenbank):
+//   • Range-High (Long-Trend): Referenz = Schlusskurs der letzten Kerze des
+//     Aufwärtsimpulses.
+//       - Kerze schließt HÖHER          -> Referenz wird aktualisiert (Trend läuft)
+//       - Kerze schließt gleich/tiefer  -> Bewegung gegen den Trend
+//       - ZWEI Kerzen in Folge gleich/tiefer -> Referenz wird als Range-High markiert
+//   • Range-Low: Referenz = tiefster Schlusskurs innerhalb der Gegenbewegung.
+//       - Kerze schließt TIEFER         -> Referenz wird aktualisiert
+//       - Kerze schließt gleich/höher   -> Bewegung zurück in Trendrichtung
+//       - ZWEI Kerzen in Folge gleich/höher -> Referenz wird als Range-Low markiert
+//   • P-Struktur  = Aufwärtsimpuls + Konsolidierung in Range (Long-Richtung)
+//   • b-Struktur  = Abwärtsimpuls  + Konsolidierung in Range (Short-Richtung)
+//   • Für Short-Trends gilt dieselbe Logik spiegelverkehrt.
+//
+//  Der Indikator nutzt automatisch den aktuell im Chart geöffneten Time Frame.
+// =============================================================================
+indicator("P-/b-Strukturen (Schlusskurs-Zählung)", shorttitle="PbD", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=500)
+
+// ===================== Eingaben ==============================================
+grpL = "Logik"
+confirmBars = input.int(2, "Bestätigungskerzen", minval=1, maxval=10, group=grpL, tooltip="Anzahl aufeinanderfolgender Schlusskurse gegen die Trendrichtung, die eine Range-Grenze bestätigen. Notion-Methodik = 2.")
+useConfirmed = input.bool(true, "Nur abgeschlossene Kerzen verwenden (kein Repainting)", group=grpL, tooltip="An: Zählung erfolgt erst beim Kerzenschluss. Aus: aktualisiert live (kann repainten).")
+
+grpV = "Darstellung"
+showBoxes   = input.bool(true,  "Strukturen (Boxen) anzeigen", group=grpV)
+showPivots  = input.bool(true,  "Range-High/Low markieren",    group=grpV)
+showLabels  = input.bool(true,  "P/b Beschriftung anzeigen",   group=grpV)
+extendLast  = input.bool(true,  "Letzte Struktur nach rechts verlängern", group=grpV)
+
+grpC = "Farben"
+pFill   = input.color(color.new(color.teal, 82), "P-Struktur Füllung", group=grpC)
+pBorder = input.color(color.teal,                "P-Struktur Rahmen",  group=grpC)
+bFill   = input.color(color.new(color.red, 82),  "b-Struktur Füllung", group=grpC)
+bBorder = input.color(color.red,                 "b-Struktur Rahmen",  group=grpC)
+
+// ===================== Status (persistent) ===================================
+var int   dir    = 1      // +1 = Aufwärtsimpuls (Range-High tracken), -1 = Abwärtsimpuls (Range-Low tracken)
+var float refExt = na     // Extrem-Schlusskurs in Trendrichtung (Pivot-Kandidat)
+var int   refBar = na
+var float ctrExt = na     // Extrem-Schlusskurs der laufenden Gegenbewegung
+var int   ctrBar = na
+var int   cnt    = 0      // Zähler der Gegen-Schlusskurse
+
+var float prevPivotPrice = na
+var int   prevPivotBar   = na
+var int   prevPivotType  = 0   // 0 = keiner, 1 = letzter Pivot war Range-High, -1 = Range-Low
+
+var box   lastBox = na
+
+// ===================== Verarbeitung pro Bar ==================================
+bool  proceed    = useConfirmed ? barstate.isconfirmed : true
+
+// Lock-Resultat dieser Bar (nicht-persistent)
+bool  lockNow    = false
+float lockPrice  = na
+int   lockBar    = na
+bool  lockIsHigh = false
+
+if proceed
+    if na(refExt)
+        // Initialisierung mit der ersten verarbeiteten Kerze
+        refExt := close
+        refBar := bar_index
+    else if dir == 1
+        // --- Aufwärtsimpuls: Range-High suchen --------------------------------
+        if close > refExt
+            refExt := close
+            refBar := bar_index
+            cnt    := 0
+            ctrExt := na
+        else
+            // Schlusskurs gleich oder tiefer -> Gegenbewegung
+            cnt += 1
+            if na(ctrExt) or close < ctrExt
+                ctrExt := close
+                ctrBar := bar_index
+            if cnt >= confirmBars
+                // Range-High bestätigt
+                lockNow    := true
+                lockPrice  := refExt
+                lockBar    := refBar
+                lockIsHigh := true
+                // Umschalten auf Range-Low-Suche; Gegen-Extrem wird neuer Kandidat
+                dir    := -1
+                refExt := ctrExt
+                refBar := ctrBar
+                cnt    := 0
+                ctrExt := na
+    else
+        // --- Abwärtsimpuls: Range-Low suchen ----------------------------------
+        if close < refExt
+            refExt := close
+            refBar := bar_index
+            cnt    := 0
+            ctrExt := na
+        else
+            // Schlusskurs gleich oder höher -> Gegenbewegung
+            cnt += 1
+            if na(ctrExt) or close > ctrExt
+                ctrExt := close
+                ctrBar := bar_index
+            if cnt >= confirmBars
+                // Range-Low bestätigt
+                lockNow    := true
+                lockPrice  := refExt
+                lockBar    := refBar
+                lockIsHigh := false
+                dir    := 1
+                refExt := ctrExt
+                refBar := ctrBar
+                cnt    := 0
+                ctrExt := na
+
+// ===================== Zeichnen ==============================================
+if lockNow
+    // Pivot-Markierung (Range-High / Range-Low)
+    if showPivots
+        label.new(lockBar, lockPrice, lockIsHigh ? "RH" : "RL", xloc=xloc.bar_index, yloc=yloc.price, style=lockIsHigh ? label.style_label_down : label.style_label_up, color=lockIsHigh ? color.new(bBorder, 20) : color.new(pBorder, 20), textcolor=color.white, size=size.tiny)
+
+    // Struktur-Box zwischen vorherigem und aktuellem Pivot
+    if showBoxes and prevPivotType != 0
+        // Aktueller Pivot Low + vorheriger High  -> P-Struktur (Long-Konsolidierung am Top)
+        // Aktueller Pivot High + vorheriger Low  -> b-Struktur (Short-Konsolidierung am Boden)
+        bool  isP   = (not lockIsHigh) and prevPivotType == 1
+        float top   = isP ? prevPivotPrice : lockPrice
+        float bot   = isP ? lockPrice      : prevPivotPrice
+        int   left  = prevPivotBar
+        int   right = lockBar
+
+        box nb = box.new(left, top, right, bot, xloc=xloc.bar_index, border_color=isP ? pBorder : bBorder, border_width=1, bgcolor=isP ? pFill : bFill)
+        lastBox := nb
+
+        if showLabels
+            label.new(isP ? left : right, top, isP ? "P" : "b", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_down, color=isP ? pBorder : bBorder, textcolor=color.white, size=size.normal)
+
+    // vorherigen Pivot aktualisieren
+    prevPivotPrice := lockPrice
+    prevPivotBar   := lockBar
+    prevPivotType  := lockIsHigh ? 1 : -1
+
+// Aktive (letzte) Struktur live nach rechts verlängern
+if extendLast and not na(lastBox)
+    box.set_right(lastBox, bar_index)
