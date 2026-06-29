@@ -19,8 +19,28 @@ Es wird ausschließlich mit **Schlusskursen** gezählt:
 - **P-Struktur** = Aufwärtsimpuls + Konsolidierung (Long-Richtung) → Box am oberen Ende.
 - **b-Struktur** = Abwärtsimpuls + Konsolidierung (Short-Richtung) → Box am unteren Ende.
 
+Eine Struktur entsteht **nur aus Impuls + folgender Konsolidierung** – der Impuls
+selbst bekommt keine Box. Die Trendrichtung wird über den Vergleich der Pivots
+bestimmt: ein **höheres Tief** nach einem Aufwärtsimpuls ergibt eine P-Struktur, ein
+**tieferes Hoch** nach einem Abwärtsimpuls eine b-Struktur. Dadurch wird eine
+Momentum-Bewegung (z. B. Long-Impuls mit grünen Kerzen) korrekt **nicht** als
+Gegenstruktur markiert.
+
 Für Short-Trends gilt die Logik spiegelverkehrt. Der Indikator arbeitet immer auf
 dem **aktuell im Chart geöffneten Time Frame** (keine feste TF-Vorgabe).
+
+### Inside- / Outside-Bars (optional, Standard: aus)
+
+Zusätzlich können Inside- und Outside-Bars markiert werden (Modul 4):
+
+- **Inside-Bar** (`IB`): Kerze liegt vollständig innerhalb der Vorkerzen-Range
+  (`high ≤ high[1]` und `low ≥ low[1]`) – Akkumulation im Trend.
+- **Outside-Bar** (`OB`): Kerze umschließt die Vorkerze komplett
+  (`high ≥ high[1]` und `low ≤ low[1]`) – Hinweis auf mögliche Trendumkehr.
+
+Diese Funktion ist **standardmäßig deaktiviert** und im Code klar abgegrenzt
+(Block `INSIDE-/OUTSIDE-BARS — START … ENDE`), sodass sie bei Bedarf komplett
+entfernt werden kann.
 
 ## Verwendung
 
@@ -37,6 +57,7 @@ dem **aktuell im Chart geöffneten Time Frame** (keine feste TF-Vorgabe).
 | **Strukturen / Range-Punkte / P-b-Beschriftung** | Anzeige-Optionen. |
 | **Letzte Struktur verlängern** | Aktuelle Range live nach rechts ziehen. |
 | **Farben** | Füllung und Rahmen für P- bzw. b-Strukturen. |
+| **Inside-/Outside-Bars anzeigen** | Optionale IB/OB-Markierung (Standard: aus). |
 
 ## Hinweis
 

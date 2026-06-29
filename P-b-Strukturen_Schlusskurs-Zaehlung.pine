@@ -17,6 +17,14 @@
 //   • b-Struktur  = Abwärtsimpuls  + Konsolidierung in Range (Short-Richtung)
 //   • Für Short-Trends gilt dieselbe Logik spiegelverkehrt.
 //
+//  WICHTIG (Korrektur ggü. v1): Eine Struktur entsteht nur aus IMPULS + folgender
+//  KONSOLIDIERUNG. Die Trendrichtung wird über den Vergleich aufeinanderfolgender
+//  Pivots bestimmt:
+//   • Höheres Tief nach einem Aufwärtsimpuls -> P-Struktur (der Impuls selbst
+//     bekommt KEINE Box).
+//   • Tieferes Hoch nach einem Abwärtsimpuls -> b-Struktur (der Impuls selbst
+//     bekommt KEINE Box).
+//
 //  Der Indikator nutzt automatisch den aktuell im Chart geöffneten Time Frame.
 // =============================================================================
 indicator("P-/b-Strukturen (Schlusskurs-Zählung)", shorttitle="PbD", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=500)
@@ -46,14 +54,16 @@ var float ctrExt = na     // Extrem-Schlusskurs der laufenden Gegenbewegung
 var int   ctrBar = na
 var int   cnt    = 0      // Zähler der Gegen-Schlusskurse
 
-var float prevPivotPrice = na
-var int   prevPivotBar   = na
-var int   prevPivotType  = 0   // 0 = keiner, 1 = letzter Pivot war Range-High, -1 = Range-Low
+// Zuletzt bestätigte Pivots (für Trendbestimmung + Box-Aufbau)
+var float lastHighPrice = na
+var int   lastHighBar   = na
+var float lastLowPrice  = na
+var int   lastLowBar     = na
 
 var box   lastBox = na
 
 // ===================== Verarbeitung pro Bar ==================================
-bool  proceed    = useConfirmed ? barstate.isconfirmed : true
+bool proceed = useConfirmed ? barstate.isconfirmed : true
 
 // Lock-Resultat dieser Bar (nicht-persistent)
 bool  lockNow    = false
@@ -116,33 +126,68 @@ if proceed
                 cnt    := 0
                 ctrExt := na
 
-// ===================== Zeichnen ==============================================
+// ===================== Strukturerkennung & Zeichnen ==========================
 if lockNow
     // Pivot-Markierung (Range-High / Range-Low)
     if showPivots
         label.new(lockBar, lockPrice, lockIsHigh ? "RH" : "RL", xloc=xloc.bar_index, yloc=yloc.price, style=lockIsHigh ? label.style_label_down : label.style_label_up, color=lockIsHigh ? color.new(bBorder, 20) : color.new(pBorder, 20), textcolor=color.white, size=size.tiny)
 
-    // Struktur-Box zwischen vorherigem und aktuellem Pivot
-    if showBoxes and prevPivotType != 0
-        // Aktueller Pivot Low + vorheriger High  -> P-Struktur (Long-Konsolidierung am Top)
-        // Aktueller Pivot High + vorheriger Low  -> b-Struktur (Short-Konsolidierung am Boden)
-        bool  isP   = (not lockIsHigh) and prevPivotType == 1
-        float top   = isP ? prevPivotPrice : lockPrice
-        float bot   = isP ? lockPrice      : prevPivotPrice
-        int   left  = prevPivotBar
-        int   right = lockBar
-
-        box nb = box.new(left, top, right, bot, xloc=xloc.bar_index, border_color=isP ? pBorder : bBorder, border_width=1, bgcolor=isP ? pFill : bFill)
-        lastBox := nb
-
-        if showLabels
-            label.new(isP ? left : right, top, isP ? "P" : "b", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_down, color=isP ? pBorder : bBorder, textcolor=color.white, size=size.normal)
-
-    // vorherigen Pivot aktualisieren
-    prevPivotPrice := lockPrice
-    prevPivotBar   := lockBar
-    prevPivotType  := lockIsHigh ? 1 : -1
+    if lockIsHigh
+        // Neues Range-High bestätigt.
+        // b-Struktur NUR, wenn es ein TIEFERES Hoch ist (= Abwärtstrend-Pullback);
+        // ein höheres Hoch ist ein Aufwärtsimpuls und bekommt KEINE Box.
+        bool isB = not na(lastHighPrice) and not na(lastLowPrice) and lockPrice < lastHighPrice
+        if isB and showBoxes
+            box nb = box.new(lastLowBar, lockPrice, lockBar, lastLowPrice, xloc=xloc.bar_index, border_color=bBorder, border_width=1, bgcolor=bFill)
+            lastBox := nb
+            if showLabels
+                label.new(lockBar, lockPrice, "b", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_down, color=bBorder, textcolor=color.white, size=size.normal)
+        // Pivot merken
+        lastHighPrice := lockPrice
+        lastHighBar   := lockBar
+    else
+        // Neues Range-Low bestätigt.
+        // P-Struktur NUR, wenn es ein HÖHERES Tief ist (= Aufwärtstrend-Pullback);
+        // ein tieferes Tief ist ein Abwärtsimpuls und bekommt KEINE Box.
+        bool isP = not na(lastLowPrice) and not na(lastHighPrice) and lockPrice > lastLowPrice
+        if isP and showBoxes
+            box nb = box.new(lastHighBar, lastHighPrice, lockBar, lockPrice, xloc=xloc.bar_index, border_color=pBorder, border_width=1, bgcolor=pFill)
+            lastBox := nb
+            if showLabels
+                label.new(lastHighBar, lastHighPrice, "P", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_down, color=pBorder, textcolor=color.white, size=size.normal)
+        // Pivot merken
+        lastLowPrice := lockPrice
+        lastLowBar   := lockBar
 
 // Aktive (letzte) Struktur live nach rechts verlängern
 if extendLast and not na(lastBox)
     box.set_right(lastBox, bar_index)
+
+// =============================================================================
+// ╔═══════════════════════════════════════════════════════════════════════════
+// ║  OPTIONAL: INSIDE- / OUTSIDE-BARS  —  START
+// ║  (Modul 4 · "Der Inside-Bar" / "Der Outside-Bar")
+// ║
+// ║  Zum Entfernen dieser Funktionalität einfach den kompletten Block zwischen
+// ║  "INSIDE-/OUTSIDE-BARS — START" und "INSIDE-/OUTSIDE-BARS — ENDE" löschen.
+// ║  Standardmäßig DEAKTIVIERT (Eingabe "Inside-/Outside-Bars anzeigen").
+// ║
+// ║   • Inside-Bar : Kerze liegt vollständig innerhalb der Vorkerzen-Range
+// ║                  (high <= high[1] und low >= low[1]). Akkumulation im Trend.
+// ║   • Outside-Bar: Kerze umschließt die Vorkerze komplett (high >= high[1]
+// ║                  und low <= low[1]). Hinweis auf mögliche Trendumkehr.
+// ╚═══════════════════════════════════════════════════════════════════════════
+grpIO = "Inside-/Outside-Bars (optional)"
+showIOBars = input.bool(false, "Inside-/Outside-Bars anzeigen", group=grpIO, tooltip="Standardmäßig deaktiviert. Markiert Inside-Bars (Akkumulation) und Outside-Bars (mögliche Umkehr).")
+ibColor    = input.color(color.orange, "Inside-Bar Farbe",  group=grpIO)
+obColor    = input.color(color.fuchsia, "Outside-Bar Farbe", group=grpIO)
+
+bool isInsideBar  = high <= high[1] and low >= low[1]
+bool isOutsideBar = high >= high[1] and low <= low[1]
+
+plotshape(showIOBars and isInsideBar,  title="Inside-Bar",  style=shape.diamond, location=location.abovebar, color=ibColor, textcolor=ibColor, size=size.tiny, text="IB")
+plotshape(showIOBars and isOutsideBar, title="Outside-Bar", style=shape.square,  location=location.belowbar, color=obColor, textcolor=obColor, size=size.tiny, text="OB")
+// ╔═══════════════════════════════════════════════════════════════════════════
+// ║  OPTIONAL: INSIDE- / OUTSIDE-BARS  —  ENDE
+// ╚═══════════════════════════════════════════════════════════════════════════
+// =============================================================================
