@@ -40,9 +40,18 @@ Zusätzlich können Inside- und Outside-Bars markiert werden (Modul 4):
 
 - **Inside-Bar**: Kerze liegt vollständig innerhalb der Vorkerzen-Range
   (`high ≤ high[1]` und `low ≥ low[1]`) – Akkumulation im Trend, markiert mit einer
-  **grauen Box**.
+  **grauen Box**. Es wird immer nur **eine Inside-Bar gleichzeitig** verwaltet, eine
+  neue entsteht erst, wenn die aktuelle abgeschlossen ist (**keine Verschachtelung**).
 - **Outside-Bar** (`OB`): Kerze umschließt die Vorkerze komplett
   (`high ≥ high[1]` und `low ≤ low[1]`) – Hinweis auf mögliche Trendumkehr.
+
+**Inside-Bar Box erweitern (Re-Test):**
+
+- **Aus:** Die Box läuft mit, bis der Kurs sie per **Schlusskurs** verlässt, und wird
+  danach noch um **x Balken** (Default 3, einstellbar) verlängert.
+- **An:** Die Box wird auch nach dem Verlassen weiter nach rechts verlängert, bis der
+  Kurs sie **erneut anläuft** (Re-Test) – passend zum Inside-Bar-Handelssignal aus
+  Modul 4.
 
 Inside- und Outside-Bars sind **getrennt schaltbar** und beide **standardmäßig
 deaktiviert**. Der Code ist klar abgegrenzt (Block
@@ -66,6 +75,8 @@ entfernt werden kann.
 | **Letzte Struktur verlängern** | Aktuelle Range live nach rechts ziehen. |
 | **Farben** | Füllung und Rahmen für P- bzw. b-Strukturen. |
 | **Inside-Bars anzeigen** | Optionale Inside-Bar-Markierung als graue Box (Standard: aus). |
+| **Inside-Bar Box erweitern (Re-Test)** | Aus: +x Balken nach Schlusskurs-Ausbruch. An: bis zum erneuten Anlaufen. |
+| **↳ Erweiterung in Balken** | Zusätzliche Balken nach dem Ausbruch (nur bei „erweitern = Aus", Default 3). |
 | **Outside-Bars anzeigen** | Optionale Outside-Bar-Markierung (Standard: aus). |
 
 ## Hinweis

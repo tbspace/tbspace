@@ -188,7 +188,9 @@ if extendLast and not na(lastBox)
 // ║                  und low <= low[1]). Hinweis auf mögliche Trendumkehr.
 // ╚═══════════════════════════════════════════════════════════════════════════
 grpIO = "Inside-/Outside-Bars (optional)"
-showInside  = input.bool(false, "Inside-Bars anzeigen",  group=grpIO, tooltip="Standardmäßig deaktiviert. Markiert Inside-Bars (Akkumulation) mit einer grauen Box.")
+showInside  = input.bool(false, "Inside-Bars anzeigen",  group=grpIO, tooltip="Standardmäßig deaktiviert. Markiert Inside-Bars (Akkumulation) mit einer grauen Box. Es wird immer nur eine Inside-Bar gleichzeitig verwaltet (keine Verschachtelung).")
+extendIB    = input.bool(false, "Inside-Bar Box erweitern (Re-Test)", group=grpIO, tooltip="Aus: Box endet x Balken nachdem der Kurs sie per Schlusskurs verlassen hat. An: Box wird auch nach dem Verlassen weiter nach rechts verlängert, bis der Kurs sie erneut anläuft (Re-Test).")
+extendBars  = input.int(3, "↳ Erweiterung in Balken (wenn 'erweitern' = Aus)", minval=0, maxval=100, group=grpIO)
 showOutside = input.bool(false, "Outside-Bars anzeigen", group=grpIO, tooltip="Standardmäßig deaktiviert. Markiert Outside-Bars (mögliche Trendumkehr).")
 ibBorder = input.color(color.new(color.gray, 0),  "Inside-Bar Box (Rahmen)",  group=grpIO)
 ibFill   = input.color(color.new(color.gray, 80), "Inside-Bar Box (Füllung)", group=grpIO)
@@ -197,10 +199,49 @@ obColor  = input.color(color.fuchsia,             "Outside-Bar Farbe",        gr
 bool isInsideBar  = high <= high[1] and low >= low[1]
 bool isOutsideBar = high >= high[1] and low <= low[1]
 
-// Inside-Bar: graue Box um die Kerze (links/rechts je 1 Bar -> sichtbar & zentriert;
-// eine Box mit left == right hätte Breite 0 und würde nicht angezeigt)
-if showInside and isInsideBar and barstate.isconfirmed
-    box.new(bar_index - 1, high, bar_index + 1, low, xloc=xloc.bar_index, border_color=ibBorder, border_width=1, bgcolor=ibFill)
+// --- Inside-Bar Zustandsmaschine -------------------------------------------
+// Es ist immer nur EINE Inside-Bar-Box aktiv (verhindert verschachtelte Inside-
+// Bars). Eine neue Inside-Bar wird erst erkannt, wenn die aktive abgeschlossen ist.
+var bool  ibActive = false   // Box wird gerade verwaltet
+var bool  ibBroken = false   // Kurs hat die Box per Schlusskurs verlassen
+var bool  ibLeft   = false   // Kurs hat die Box nach dem Ausbruch vollständig verlassen
+var float ibTop    = na
+var float ibBot    = na
+var box   ibBox    = na
+
+if showInside and barstate.isconfirmed
+    if ibActive
+        // Box immer bis zur aktuellen Kerze nach rechts mitführen
+        box.set_right(ibBox, bar_index)
+        if not ibBroken
+            // Ausbruch = Schlusskurs außerhalb der Box-Range
+            if close > ibTop or close < ibBot
+                ibBroken := true
+                if not extendIB
+                    // 'Erweitern' = Aus: noch x Balken verlängern und abschließen
+                    box.set_right(ibBox, bar_index + extendBars)
+                    ibActive := false
+        else
+            // 'Erweitern' = An: weiter verlängern bis zum erneuten Anlaufen (Re-Test)
+            if not ibLeft
+                // warten, bis der Kurs die Box vollständig verlassen hat
+                if low > ibTop or high < ibBot
+                    ibLeft := true
+            else
+                // erneutes Anlaufen: Kerzen-Range berührt die Box wieder
+                if high >= ibBot and low <= ibTop
+                    box.set_right(ibBox, bar_index)
+                    ibActive := false
+    else
+        // keine aktive Box -> neue Inside-Bar darf entstehen
+        if isInsideBar
+            ibTop    := high
+            ibBot    := low
+            ibBroken := false
+            ibLeft   := false
+            ibActive := true
+            // links 1 Bar Versatz, damit die Box von Beginn an sichtbar ist
+            ibBox := box.new(bar_index - 1, ibTop, bar_index, ibBot, xloc=xloc.bar_index, border_color=ibBorder, border_width=1, bgcolor=ibFill)
 
 // Outside-Bar: Marker unter der Kerze
 plotshape(showOutside and isOutsideBar, title="Outside-Bar", style=shape.square, location=location.belowbar, color=obColor, textcolor=obColor, size=size.tiny, text="OB")
